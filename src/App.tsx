@@ -1,128 +1,108 @@
+import { useState } from "react";
 import "./styles.css";
+import { shutdown, useStore } from "./store";
+import { Dashboard } from "./components/Dashboard";
+import { Pipes } from "./components/Pipes";
+import { Venues } from "./components/Venues";
+import { Scheduling } from "./components/Scheduling";
+import { Conflicts } from "./components/Conflicts";
+import { Report } from "./components/Report";
+import { RecoveryBanner } from "./components/RecoveryBanner";
+import { Button } from "./components/ui";
 
-const project = {
-  "sourceNo": 7,
-  "id": "hxyfront-62005",
-  "port": 62005,
-  "title": "管风琴音管调音记录",
-  "domain": "管风琴维护",
-  "prompt": "做一个给管风琴维护人员使用的音管调音记录前端项目，可以记录教堂或音乐厅名称、音栓、音管编号、音高、音分偏差、温湿度、簧片状态和维修备注。页面需要有音栓列表、调音偏差表、温湿度记录、异常音管标记和单次维护报告页。",
-  "palette": [
-    "#854d0e",
-    "#475569",
-    "#0ea5e9"
-  ],
-  "metrics": [
-    "音栓数量",
-    "偏差超限",
-    "温度",
-    "湿度"
-  ],
-  "filters": [
-    "主音栓",
-    "簧片音栓",
-    "混合音栓",
-    "低音管"
-  ],
-  "fields": [
-    "场馆名称",
-    "音栓",
-    "音管编号",
-    "音高",
-    "音分偏差",
-    "维修备注"
-  ],
-  "records": [
-    [
-      "St.Mary",
-      "Trumpet 8'",
-      "C#4 +9cent",
-      "簧片需微调"
-    ],
-    [
-      "ConcertHall A",
-      "Principal 4'",
-      "G3 -3cent",
-      "正常"
-    ],
-    [
-      "Abbey Room",
-      "Bourdon 16'",
-      "F2 -12cent",
-      "标记复检"
-    ]
-  ]
-};
+const TABS = [
+  { id: "dashboard", label: "总览" },
+  { id: "pipes", label: "音管台账" },
+  { id: "venues", label: "场馆音栓" },
+  { id: "schedule", label: "排程台" },
+  { id: "conflicts", label: "冲突核对" },
+  { id: "report", label: "维护报告" },
+];
 
-function App() {
+export default function App() {
+  const [tab, setTab] = useState("dashboard");
+  const [poweredOff, setPoweredOff] = useState(false);
+  const conflicts = useStore().conflicts;
+  const unfinished = useStore().reservations.filter(
+    (r) => r.status === "预留" || r.status === "已失效" || r.status === "待恢复",
+  ).length;
+  const pendingConflicts = conflicts.filter((c) => c.status === "待核对").length;
+
+  const doShutdown = () => {
+    shutdown(); // 未完成预留转待恢复，数据写入本机
+    setPoweredOff(true);
+  };
+
+  if (poweredOff) {
+    return (
+      <div className="poweroff">
+        <div className="poweroff-card">
+          <h1>已关机</h1>
+          <p>排程与实测值已保存在本机浏览器中。</p>
+          <p className="sub">重新开机后可接着补全未完成的排程与冲突核对。</p>
+          <Button
+            variant="primary"
+            onClick={() => {
+              // 重新开机：刷新页面，从本机恢复
+              window.location.reload();
+            }}
+          >
+            重新开机
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main className="app">
-      <section className="hero">
-        <p>{project.id} · 源提示词{project.sourceNo} · Port {project.port}</p>
-        <h1>{project.title}</h1>
-        <span>{project.prompt}</span>
-      </section>
+      <header className="topbar">
+        <div className="topbar-id">
+          <span className="topbar-project">hxyfront-62005 · 管风琴维护</span>
+          <h1>调音排程台</h1>
+          <p className="topbar-sub">
+            移动风机轮转排程 · 簧片管湿度稳定时长 · 双调音师实测冲突核对 · 本机持久化与故障恢复
+          </p>
+        </div>
+        <div className="topbar-actions">
+          <Button variant="danger" onClick={doShutdown}>
+            模拟关机
+          </Button>
+        </div>
+      </header>
 
-      <section className="metrics">
-        {project.metrics.map((metric: string, index: number) => (
-          <article key={metric}>
-            <small>{metric}</small>
-            <strong>{[86, 14, 7, 32][index] ?? 12}</strong>
-          </article>
+      <nav className="tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={tab === t.id ? "tab tab-on" : "tab"}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+            {t.id === "conflicts" && pendingConflicts > 0 && (
+              <span className="tab-badge">{pendingConflicts}</span>
+            )}
+            {t.id === "schedule" && unfinished > 0 && (
+              <span className="tab-badge tab-badge-red">{unfinished}</span>
+            )}
+          </button>
         ))}
-      </section>
+      </nav>
 
-      <section className="workspace">
-        <aside className="panel">
-          <h2>{project.domain}筛选</h2>
-          <div className="chips">
-            {project.filters.map((item: string) => (
-              <button key={item}>{item}</button>
-            ))}
-          </div>
-        </aside>
+      <RecoveryBanner onNavigate={setTab} />
 
-        <section className="panel form-panel">
-          <div className="heading">
-            <div>
-              <p>专业字段</p>
-              <h2>新增记录</h2>
-            </div>
-            <button className="primary">保存草稿</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
-        </section>
-      </section>
+      <div className="tab-content">
+        {tab === "dashboard" && <Dashboard onNavigate={setTab} />}
+        {tab === "pipes" && <Pipes onNavigate={setTab} />}
+        {tab === "venues" && <Venues />}
+        {tab === "schedule" && <Scheduling onShutdown={doShutdown} />}
+        {tab === "conflicts" && <Conflicts />}
+        {tab === "report" && <Report />}
+      </div>
 
-      <section className="panel">
-        <div className="heading">
-          <div>
-            <p>历史记录</p>
-            <h2>近期工作台</h2>
-          </div>
-          <button>导出摘要</button>
-        </div>
-        <div className="records">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")}>
-              <b>{String(index + 1).padStart(2, "0")}</b>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <footer className="foot">
+        数据保存在本机 localStorage · 关机或风机故障后恢复时，预留与实测值不丢失
+      </footer>
     </main>
   );
 }
-
-export default App;
